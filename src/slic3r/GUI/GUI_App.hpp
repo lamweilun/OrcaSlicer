@@ -83,6 +83,8 @@ class Downloader;
 struct GUI_InitParams;
 class ParamsDialog;
 class HMSQuery;
+class SpoolManager;
+class SpoolManagerDialog;
 class ModelMallDialog;
 class PingCodeBindDialog;
 class NetworkErrorDialog;
@@ -360,6 +362,7 @@ public:
     void show_message_box(std::string msg) { wxMessageBox(msg); }
     EAppMode get_app_mode() const { return m_app_mode; }
     Slic3r::DeviceManager* getDeviceManager() { return m_device_manager; }
+    Slic3r::GUI::SpoolManager* getSpoolManager();
     bool                   is_blocking_printing(MachineObject *obj_ = nullptr);
     Slic3r::TaskManager*   getTaskManager() { return m_task_manager; }
     HMSQuery* get_hms_query() { return hms_query; }
@@ -561,6 +564,7 @@ public:
 
     PresetBundleDialog* m_preset_bundle_dlg{nullptr};
     PluginsDialog* m_plugins_dlg{nullptr};
+    SpoolManagerDialog* m_spool_manager_dlg{nullptr};
     SpeedDialWebDialog* m_speed_dial_dialog{nullptr};
     TerminalDialog* m_terminal_dlg{nullptr};
     ActionRegistry  m_action_registry;
@@ -633,6 +637,7 @@ public:
     void            open_preferences(size_t open_on_tab = 0, const std::string& highlight_option = std::string());
     void            open_presetbundledialog(size_t open_on_tab = 0, const std::string& highlight_option = std::string());
     void            open_plugins_dialog(size_t open_on_tab = 0, const std::string& highlight_option = std::string());
+    void            open_spool_manager_dialog();
     void            open_terminal_dialog();
     void            open_speed_dial();
     ActionRegistry& action_registry() { return m_action_registry; }

@@ -1291,6 +1291,17 @@ void AMSLib::render_generic_text(wxDC &dc)
         auto pot = wxPoint((libsize.x - tsize.x) / 2, (libsize.y - tsize.y) / 2 + FromDIP(3));
         dc.DrawText(_L("Empty"), pot);
     }
+
+    // Orca spool ledger: badge with the ledger-computed remaining percentage
+    // when a spool is assigned to this slot.
+    if (!m_info.spool_id.empty() && m_info.spool_remain_pct >= 0) {
+        wxString remain_text = wxString::Format("%d%%", m_info.spool_remain_pct);
+        dc.SetFont(::Label::Body_10);
+        dc.SetTextForeground(temp_text_colour);
+        auto tsize = dc.GetTextExtent(remain_text);
+        auto pot   = wxPoint(libsize.x - tsize.x - FromDIP(4), FromDIP(3));
+        dc.DrawText(remain_text, pot);
+    }
 }
 
 void AMSLib::doRender(wxDC &dc)
@@ -1744,6 +1755,14 @@ void AMSLib::Update(Caninfo info, std::string ams_idx, bool refresh)
     m_info = info;
     m_ams_id = ams_idx;
     m_slot_id = info.can_id;
+    if (!info.spool_id.empty()) {
+        wxString remain_str;
+        if (info.spool_remain_pct >= 0)
+            remain_str = wxString::Format(", %d%%", info.spool_remain_pct);
+        SetToolTip(wxString::Format(_L("Spool: %s%s"), info.spool_name, remain_str));
+    } else {
+        UnsetToolTip();
+    }
     if (refresh) Refresh();
 }
 

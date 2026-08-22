@@ -1,5 +1,6 @@
 #include "SelectMachine.hpp"
 #include "I18N.hpp"
+#include "SpoolManager.hpp"
 
 #include "libslic3r/Utils.hpp"
 #include "libslic3r/Thread.hpp"
@@ -3705,6 +3706,29 @@ void SelectMachineDialog::on_send_print()
     if (agent) {
         std::string dev_ota_str = "dev_ota_ver:" + obj_->get_dev_id();
         agent->track_update_property(dev_ota_str, obj_->get_ota_version());
+    }
+
+    // Spool ledger: deduct the estimated per-extruder usage as Pending entries.
+    // They are confirmed when the printer reports the print finished and refunded
+    // when it reports failure/cancel or when the upload itself fails.
+    {
+        std::vector<FilamentInfo> usage_filaments;
+        if (m_print_plate_idx >= 0 && m_print_plate_idx < (int) m_required_data_plate_data_list.size() &&
+            m_required_data_plate_data_list[m_print_plate_idx] != nullptr)
+            usage_filaments = m_required_data_plate_data_list[m_print_plate_idx]->slice_filaments_info;
+        // Overlay the user-confirmed tray mapping (ams/slot per extruder) onto the usage list.
+        for (FilamentInfo &usage : usage_filaments) {
+            for (const FilamentInfo &mapping : m_ams_mapping_result) {
+                if (mapping.id == usage.id) {
+                    usage.ams_id  = mapping.ams_id;
+                    usage.slot_id = mapping.slot_id;
+                    usage.tray_id = mapping.tray_id;
+                    break;
+                }
+            }
+        }
+        SpoolManager::instance().record_print_usage(obj_->get_dev_id(), obj_->get_dev_name(),
+            m_current_project_name.utf8_string(), usage_filaments);
     }
 
     replace_job(*m_worker, m_print_job);

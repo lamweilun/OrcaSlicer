@@ -7,6 +7,7 @@
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/MainFrame.hpp"
 #include "slic3r/GUI/format.hpp"
+#include "slic3r/GUI/SpoolManager.hpp"
 #include "bambu_networking.hpp"
 
 #include "slic3r/GUI/DeviceCore/DevManager.h"
@@ -643,6 +644,10 @@ void PrintJob::process(Ctl &ctl)
 
     if (result < 0) {
         curr_percent = -1;
+
+        // The upload never reached the printer, so undo the spool usage that was
+        // deducted as Pending when the job was queued. No-op when nothing was deducted.
+        SpoolManager::instance().refund_device(m_dev_id);
 
         // The printer is still fetching its encryption flag (a transient state), so ask the
         // user to retry rather than showing a generic error.

@@ -28,6 +28,7 @@ add_executable(${_TEST_NAME}_tests
     test_mutable_priority_queue.cpp
     test_nozzle_volume_type.cpp
     test_stl.cpp
+    test_spool.cpp
     test_meshboolean.cpp
     test_marchingsquares.cpp
     test_model.cpp

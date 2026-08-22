@@ -1,5 +1,7 @@
 #include "ExportPresetBundleDialog.hpp"
 #include "OrcaCloudServiceAgent.hpp"
+#include "SpoolManager.hpp"
+#include "SpoolManagerDialog.hpp"
 #include "libslic3r/Technologies.hpp"
 #include "libslic3r/Platform.hpp"
 #include "GUI_App.hpp"
@@ -1095,6 +1097,39 @@ wxDEFINE_EVENT(EVT_UPDATE_PRESET_BUNDLE, wxCommandEvent);
 wxDEFINE_EVENT(EVT_UPDATE_BUNDLE_COMPLETE, wxCommandEvent);
 
 IMPLEMENT_APP(GUI_App)
+
+Slic3r::GUI::SpoolManager* GUI_App::getSpoolManager()
+{
+    return &Slic3r::GUI::SpoolManager::instance();
+}
+
+void GUI_App::open_spool_manager_dialog()
+{
+    if (m_spool_manager_dlg) {
+        m_spool_manager_dlg->Show();
+        m_spool_manager_dlg->Raise();
+        return;
+    }
+
+    try {
+        m_spool_manager_dlg = new SpoolManagerDialog(mainframe);
+        m_spool_manager_dlg->Bind(wxEVT_DESTROY, [this](wxWindowDestroyEvent& event) {
+            if (event.GetEventObject() == m_spool_manager_dlg)
+                m_spool_manager_dlg = nullptr;
+            event.Skip();
+        });
+        m_spool_manager_dlg->Show();
+        m_spool_manager_dlg->Raise();
+    } catch (const std::exception& e) {
+        BOOST_LOG_TRIVIAL(error) << "open_spool_manager_dialog failed: " << e.what();
+        if (m_spool_manager_dlg) {
+            m_spool_manager_dlg->Destroy();
+            m_spool_manager_dlg = nullptr;
+        }
+        wxMessageBox(wxString::Format(_L("Failed to open the Spool Manager:\n%s"), from_u8(e.what())), _L("Spool Manager"),
+                     wxOK | wxICON_ERROR, mainframe);
+    }
+}
 
 //BBS: remove GCodeViewer as seperate APP logic
 //GUI_App::GUI_App(EAppMode mode)

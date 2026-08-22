@@ -2,6 +2,7 @@
 #define slic3r_AMSMaterialsSetting_hpp_
 
 #include "libslic3r/Preset.hpp"
+#include "libslic3r/Spool.hpp"
 #include "wxExtensions.hpp"
 #include "GUI_Utils.hpp"
 #include "DeviceManager.hpp"
@@ -200,6 +201,20 @@ protected:
         std::string setting_id;
     };
     std::map<std::string, FilamentInfos> map_filament_items;
+
+    // Orca spool ledger: per-slot spool assignment (persisted locally on Confirm).
+    // Native wxComboBox on macOS, mirroring m_comboBox_filament (custom combo mis-renders there).
+#ifdef __APPLE__
+    wxComboBox*              m_comboBox_spool = nullptr;
+#else
+    ComboBox*                m_comboBox_spool = nullptr;
+#endif
+    Label*                   m_spool_info     = nullptr;
+    std::vector<SpoolRecord> m_spool_items;
+    std::string              m_prev_assigned_spool_id;
+    void                     update_spool_section();
+    void                     update_spool_info_label();
+    void                     on_select_spool(wxCommandEvent &event);
 };
 
 wxDECLARE_EVENT(EVT_SELECTED_COLOR, wxCommandEvent);

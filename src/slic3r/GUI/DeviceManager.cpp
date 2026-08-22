@@ -11,6 +11,7 @@
 #include "DeviceErrorDialog.hpp"
 #include "Plater.hpp"
 #include "GUI_App.hpp"
+#include "SpoolManager.hpp"
 #include "ReleaseNote.hpp"
 #include <thread>
 #include <mutex>
@@ -2622,7 +2623,18 @@ void MachineObject::reset()
 
 void MachineObject::set_print_state(std::string status)
 {
+    if (status == print_status)
+        return;
     print_status = status;
+
+    // Spool ledger: settle the Pending usage entries recorded when a print was
+    // sent. This fires for every agent (Bambu MQTT and Moonraker-family alike)
+    // since all normalize their print state into gcode_state.
+    if (status == "FINISH") {
+        GUI::SpoolManager::instance().confirm_device(dev_id);
+    } else if (status == "FAILED") {
+        GUI::SpoolManager::instance().refund_device(dev_id);
+    }
 }
 
 int MachineObject::connect(bool use_openssl)

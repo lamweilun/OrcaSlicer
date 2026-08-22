@@ -468,6 +468,10 @@ set(SLIC3R_GUI_SOURCES
     GUI/SelectMachinePop.hpp
     GUI/SendMultiMachinePage.cpp
     GUI/SendMultiMachinePage.hpp
+    GUI/SpoolManager.cpp
+    GUI/SpoolManager.hpp
+    GUI/SpoolManagerDialog.cpp
+    GUI/SpoolManagerDialog.hpp
     GUI/SendSystemInfoDialog.cpp
     GUI/SendSystemInfoDialog.hpp
     GUI/SendToPrinter.cpp

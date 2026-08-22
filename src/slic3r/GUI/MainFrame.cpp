@@ -3400,6 +3400,15 @@ void MainFrame::init_menubar_as_editor()
         },
         "", nullptr, []() { return true; }, this);
 
+    // Orca spool ledger: global spool inventory manager
+    top_menu->AppendSeparator();
+    append_menu_item(
+        top_menu, wxID_ANY, _L("Spool Manager") + "\t", _L("Manage filament spools, remaining material and usage history"),
+        [this](wxCommandEvent &) {
+            wxGetApp().open_spool_manager_dialog();
+        },
+        "", nullptr, []() { return true; }, this);
+
     //m_topbar->AddDropDownMenuItem(preference_item);
     //m_topbar->AddDropDownMenuItem(printer_item);
     //m_topbar->AddDropDownMenuItem(language_item);

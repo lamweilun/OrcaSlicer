@@ -2,6 +2,7 @@
 #include "ExtrusionCalibration.hpp"
 #include "MsgDialog.hpp"
 #include "GUI_App.hpp"
+#include "SpoolManager.hpp"
 #include "libslic3r/Preset.hpp"
 #include "I18N.hpp"
 #include <algorithm>
@@ -265,6 +266,31 @@ void AMSMaterialsSetting::create_panel_normal(wxWindow* parent)
     m_panel_SN->Layout();
     m_panel_SN->Fit();
 
+    // Orca spool ledger: spool assignment row (local bookkeeping, printer-agnostic).
+    wxBoxSizer* m_sizer_spool = new wxBoxSizer(wxHORIZONTAL);
+    auto m_title_spool = new wxStaticText(parent, wxID_ANY, _L("Spool"), wxDefaultPosition, wxSize(AMS_MATERIALS_SETTING_LABEL_WIDTH, -1), 0);
+    m_title_spool->SetFont(::Label::Body_13);
+    m_title_spool->SetForegroundColour(AMS_MATERIALS_SETTING_GREY800);
+    m_title_spool->Wrap(-1);
+    m_sizer_spool->Add(m_title_spool, 0, wxALIGN_CENTER, 0);
+    m_sizer_spool->Add(0, 0, 0, wxEXPAND, 0);
+
+    wxBoxSizer* sizer_spool_right = new wxBoxSizer(wxVERTICAL);
+#ifdef __APPLE__
+    m_comboBox_spool = new wxComboBox(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, AMS_MATERIALS_SETTING_COMBOX_WIDTH, 0, nullptr, wxCB_READONLY);
+#else
+    m_comboBox_spool = new ::ComboBox(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, AMS_MATERIALS_SETTING_COMBOX_WIDTH, 0, nullptr, wxCB_READONLY);
+#endif
+    m_comboBox_spool->Bind(wxEVT_COMMAND_COMBOBOX_SELECTED, &AMSMaterialsSetting::on_select_spool, this);
+    sizer_spool_right->Add(m_comboBox_spool, 0, wxALIGN_CENTER, 0);
+
+    m_spool_info = new Label(parent, wxEmptyString);
+    m_spool_info->SetForegroundColour(AMS_MATERIALS_SETTING_GREY700);
+    m_spool_info->SetFont(::Label::Body_11);
+    sizer_spool_right->Add(m_spool_info, 0, wxALIGN_CENTER_VERTICAL | wxTOP, FromDIP(2));
+    m_sizer_spool->Add(sizer_spool_right, 1, wxALIGN_CENTER, 0);
+    m_spool_info->SetLabelText(wxEmptyString);
+
     wxBoxSizer* m_tip_sizer = new wxBoxSizer(wxHORIZONTAL);
     m_tip_readonly = new Label(parent, "");
     m_tip_readonly->SetForegroundColour(*wxBLACK);
@@ -283,6 +309,8 @@ void AMSMaterialsSetting::create_panel_normal(wxWindow* parent)
     sizer->Add(0, 0, 0, wxTOP, FromDIP(5));
     sizer->Add(warning_text, 0, wxLEFT | wxRIGHT, FromDIP(20));
     sizer->Add(m_panel_SN, 0, wxLEFT, FromDIP(20));
+    sizer->Add(0, 0, 0, wxTOP, FromDIP(16));
+    sizer->Add(m_sizer_spool, 0, wxLEFT | wxRIGHT, FromDIP(20));
     sizer->Add(0, 0, 0, wxTOP, FromDIP(24));
     sizer->Add(m_tip_sizer, 0, wxLEFT, FromDIP(20));
     parent->SetSizer(sizer);
@@ -455,6 +483,12 @@ void AMSMaterialsSetting::update_filament_editing(bool is_printing)
         m_input_n_val->Enable(false);
         m_button_confirm->Hide();
         m_button_reset->Hide();
+    }
+
+    // Orca spool ledger: assignment follows the same editing gates as the rest.
+    if (m_comboBox_spool) {
+        bool spool_editable = !m_view_only && (!is_printing || obj->is_support_filament_setting_inprinting);
+        m_comboBox_spool->Enable(spool_editable);
     }
 }
 
@@ -784,6 +818,25 @@ void AMSMaterialsSetting::on_select_ok(wxCommandEvent &event)
             obj->command_extrusion_cali_set(cali_tray_id, "", "", k, n);
         }
     }
+
+    // Orca spool ledger: persist the spool assignment for this slot. Purely
+    // local bookkeeping - no printer command is involved, so this applies to
+    // every agent (AMS, CFS, AFC lanes, virtual trays).
+    if (obj) {
+        int selection = m_comboBox_spool ? m_comboBox_spool->GetSelection() : 0;
+        std::string chosen;
+        if (selection > 0 && selection <= (int) m_spool_items.size())
+            chosen = m_spool_items[selection - 1].id;
+        if (chosen != m_prev_assigned_spool_id) {
+            std::string dev_id   = obj->get_dev_id();
+            std::string ams_key  = std::to_string(ams_id);
+            std::string slot_key = std::to_string(slot_id);
+            if (chosen.empty())
+                SpoolManager::instance().unassign_slot(dev_id, ams_key, slot_key);
+            else
+                SpoolManager::instance().assign_slot(dev_id, ams_key, slot_key, chosen);
+        }
+    }
     Close();
 }
 
@@ -866,6 +919,76 @@ bool AMSMaterialsSetting::is_virtual_tray()
     if (ams_id == VIRTUAL_TRAY_MAIN_ID || ams_id == VIRTUAL_TRAY_DEPUTY_ID)
         return true;
     return false;
+}
+
+void AMSMaterialsSetting::update_spool_section()
+{
+    m_spool_items.clear();
+    if (!m_comboBox_spool)
+        return;
+    m_comboBox_spool->Clear();
+    m_comboBox_spool->Append(_L("(no spool)"));
+    for (const SpoolRecord &record : SpoolManager::instance().records()) {
+        m_spool_items.push_back(record);
+        m_comboBox_spool->Append(GUI::from_u8(record.name) + " (" + GUI::from_u8(record.filament_type) + ")");
+    }
+
+    // Resolve the preselection: persisted assignment first, then an RFID tag
+    // match, then a heuristic candidate. A suggestion only becomes the
+    // assignment when the user confirms the dialog.
+    std::string dev_id    = obj ? obj->get_dev_id() : std::string();
+    std::string ams_key   = std::to_string(ams_id);
+    std::string slot_key  = std::to_string(slot_id);
+    std::string assigned   = SpoolManager::instance().spool_for_slot(dev_id, ams_key, slot_key);
+    m_prev_assigned_spool_id = assigned;
+
+    int selection = 0;
+    auto index_of = [this](const std::string &spool_id) -> int {
+        for (size_t i = 0; i < m_spool_items.size(); ++i)
+            if (m_spool_items[i].id == spool_id)
+                return (int) i + 1;
+        return 0;
+    };
+
+    if (!assigned.empty()) {
+        selection = index_of(assigned);
+    } else if (obj) {
+        DevAmsTray *tray = obj->GetFilaSystem()->GetAmsTray(ams_key, slot_key);
+        std::string tag_uid      = tray ? tray->tag_uid : std::string();
+        std::string setting_id   = tray ? tray->setting_id : std::string();
+        std::string fila_type    = tray ? tray->get_display_filament_type() : std::string();
+        std::string tray_color   = tray ? tray->color : std::string();
+        SpoolRecord match;
+        if (!tag_uid.empty() && SpoolManager::instance().find_by_tag(tag_uid, match))
+            selection = index_of(match.id);
+        else if (SpoolManager::instance().find_candidate(setting_id, fila_type, tray_color, match))
+            selection = index_of(match.id);
+    }
+
+    m_comboBox_spool->SetSelection(selection);
+    update_spool_info_label();
+}
+
+void AMSMaterialsSetting::update_spool_info_label()
+{
+    if (!m_spool_info)
+        return;
+    int selection = m_comboBox_spool ? m_comboBox_spool->GetSelection() : -1;
+    if (selection <= 0 || selection > (int) m_spool_items.size()) {
+        m_spool_info->SetLabelText(wxEmptyString);
+        return;
+    }
+    const SpoolRecord &record = m_spool_items[selection - 1];
+    float remain_pct   = record.remaining_pct();
+    wxString pct_str   = remain_pct < 0.0f ? _L("unknown") : wxString::Format("%d%%", (int) (remain_pct + 0.5f));
+    m_spool_info->SetLabelText(
+        wxString::Format(_L("Remaining: %.0f g / %.1f m (%s)"), (double) record.remaining_g(), (double) record.remaining_m(), pct_str));
+}
+
+void AMSMaterialsSetting::on_select_spool(wxCommandEvent &event)
+{
+    event.Skip();
+    update_spool_info_label();
 }
 
 void AMSMaterialsSetting::update_widgets()
@@ -1204,6 +1327,7 @@ void AMSMaterialsSetting::Popup(wxString filament, wxString sn, wxString temp_mi
     // Set the flag whether to open the filament setting dialog from the device page
     m_comboBox_filament->SetClientData(new int(1));
 
+    update_spool_section();
     update();
     Layout();
     Fit();

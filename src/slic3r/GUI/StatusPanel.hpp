@@ -642,6 +642,9 @@ protected:
     SafetyOptionsDialog* safety_options_dlg { nullptr };
     CalibrationDialog*   calibration_dlg {nullptr};
     AMSMaterialsSetting *m_filament_setting_dlg{nullptr};
+    // Orca spool ledger: last object seen by update_ams, used to re-render the
+    // slot cards when a ledger assignment changes outside the MQTT cycle.
+    MachineObject* m_spool_refresh_obj{nullptr};
 
     DeviceErrorDialog* m_print_error_dlg = nullptr;
     SecondaryCheckDialog* abort_dlg = nullptr;
@@ -779,6 +782,7 @@ protected:
     void update_temp_ctrl(MachineObject *obj);
     void update_misc_ctrl(MachineObject *obj);
     void update_ams(MachineObject* obj);
+    void on_spool_ledger_changed(wxCommandEvent &event);
     void update_rack(MachineObject* obj);
     void update_filament_loading_panel(MachineObject* obj);
 

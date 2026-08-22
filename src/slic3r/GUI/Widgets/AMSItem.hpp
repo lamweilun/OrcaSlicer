@@ -190,6 +190,11 @@ struct Caninfo
     float           k = 0.0f;
     float           n = 0.0f;
     std::vector<wxColour> material_cols;
+    // Orca spool ledger: spool assigned to this slot (empty when none). The
+    // remaining percentage is computed by the ledger, -1 when unknown.
+    std::string     spool_id;
+    wxString        spool_name;
+    int             spool_remain_pct = -1;
 
 public:
     bool operator==(const Caninfo& other) const
@@ -204,7 +209,10 @@ public:
             filament_id == other.filament_id &&
             k == other.k &&
             n == other.n &&
-            material_cols == other.material_cols)
+            material_cols == other.material_cols &&
+            spool_id == other.spool_id &&
+            spool_name == other.spool_name &&
+            spool_remain_pct == other.spool_remain_pct)
         {
             return true;
         }

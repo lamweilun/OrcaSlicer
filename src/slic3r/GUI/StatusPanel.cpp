@@ -1,5 +1,6 @@
 #include "StatusPanel.hpp"
 #include "I18N.hpp"
+#include "SpoolManager.hpp"
 #include "Widgets/Label.hpp"
 #include "Widgets/Button.hpp"
 #include "Widgets/StepCtrl.hpp"
@@ -2413,6 +2414,10 @@ StatusPanel::StatusPanel(wxWindow *parent, wxWindowID id, const wxPoint &pos, co
     m_buttons.push_back(m_bpButton_e_down_10);
 
     obj = nullptr;
+    m_spool_refresh_obj = nullptr;
+    // Re-render the slot cards when a spool assignment changes outside the
+    // regular MQTT update cycle (assign/unassign/usage deduction).
+    wxGetApp().getSpoolManager()->Bind(EVT_SPOOL_LEDGER_CHANGED, &StatusPanel::on_spool_ledger_changed, this);
     m_score_data         = new ScoreData;
     m_score_data->rating_id = -1;
     /* set default values */
@@ -2515,6 +2520,7 @@ StatusPanel::StatusPanel(wxWindow *parent, wxWindowID id, const wxPoint &pos, co
 StatusPanel::~StatusPanel()
 {
     // Disconnect Events
+    wxGetApp().getSpoolManager()->Unbind(EVT_SPOOL_LEDGER_CHANGED, &StatusPanel::on_spool_ledger_changed, this);
     m_project_task_panel->get_bitmap_thumbnail()->Disconnect(wxEVT_LEFT_DOWN, wxMouseEventHandler(StatusPanel::refresh_thumbnail_webrequest), NULL, this);
     m_project_task_panel->get_partskip_button()->Disconnect(wxEVT_LEFT_DOWN, wxCommandEventHandler(StatusPanel::on_subtask_partskip), NULL, this);
     m_project_task_panel->get_pause_resume_button()->Disconnect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(StatusPanel::on_subtask_pause_resume), NULL, this);
@@ -3404,6 +3410,32 @@ void StatusPanel::update_ams(MachineObject *obj)
         ext_info.push_back(info);
     }
 
+    m_spool_refresh_obj = obj;
+    // Orca spool ledger: overlay the assigned spool and its computed remaining
+    // onto every slot card. Works for all agents since tray identity is uniform.
+    {
+        const std::string dev_id    = obj->get_dev_id();
+        SpoolManager     *spools    = &SpoolManager::instance();
+        auto apply_spool = [&](AMSinfo &info) {
+            for (Caninfo &can : info.cans) {
+                std::string spool_id = spools->spool_for_slot(dev_id, info.ams_id, can.can_id);
+                if (spool_id.empty())
+                    continue;
+                SpoolRecord record;
+                if (!spools->get_record(spool_id, record))
+                    continue;
+                can.spool_id        = record.id;
+                can.spool_name      = GUI::from_u8(record.name);
+                float remain_pct    = record.remaining_pct();
+                can.spool_remain_pct = remain_pct < 0.0f ? -1 : (int) (remain_pct + 0.5f);
+            }
+        };
+        for (AMSinfo &info : ams_info)
+            apply_spool(info);
+        for (AMSinfo &info : ext_info)
+            apply_spool(info);
+    }
+
     // must select a current can
     m_ams_control->UpdateAms(obj->get_printer_series_str(), obj->printer_type, ams_info, ext_info, *obj->GetExtderSystem(), obj->get_dev_id(), obj, false);
     m_ams_control->UpdateAmsDryControl(obj);
@@ -3510,6 +3542,13 @@ void StatusPanel::update_ams(MachineObject *obj)
     }
 
     update_ams_control_state(curr_ams_id, curr_can_id);
+}
+
+void StatusPanel::on_spool_ledger_changed(wxCommandEvent &event)
+{
+    event.Skip();
+    if (m_spool_refresh_obj && m_spool_refresh_obj->is_connected())
+        update_ams(m_spool_refresh_obj);
 }
 
 

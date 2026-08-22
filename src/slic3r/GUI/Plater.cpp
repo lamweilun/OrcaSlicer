@@ -2948,6 +2948,15 @@ Sidebar::Sidebar(Plater *parent)
     bSizer39->Add(ams_btn, 0, wxALIGN_CENTER | wxLEFT, FromDIP(SidebarProps::WideSpacing()));
     //bSizer39->Add(FromDIP(10), 0, 0, 0, 0 );
 
+    // Orca spool ledger: open the global Spool Manager
+    ScalableButton* spool_btn = new ScalableButton(p->m_panel_filament_title, wxID_ANY, "spool", wxEmptyString, wxDefaultSize, wxDefaultPosition,
+                                                   wxBU_EXACTFIT | wxNO_BORDER, false, 16);
+    spool_btn->SetToolTip(_L("Open the Spool Manager"));
+    spool_btn->Bind(wxEVT_BUTTON, [](wxCommandEvent &e) {
+        wxGetApp().open_spool_manager_dialog();
+    });
+    bSizer39->Add(spool_btn, 0, wxALIGN_CENTER | wxLEFT, FromDIP(SidebarProps::WideSpacing()));
+
     ScalableButton* set_btn = new ScalableButton(p->m_panel_filament_title, wxID_ANY, "settings");
     set_btn->SetToolTip(_L("Set filaments to use"));
     set_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent &e) {
